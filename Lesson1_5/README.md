@@ -7,12 +7,12 @@
 
 ## Мета демонстрації
 
-Показати, як до VPC з Lesson1_3 додаються EC2, ALB, S3, CloudFront і Lambda.
+Показати, як до VPC з Lesson1_4 додаються EC2, ALB, S3, CloudFront і Lambda.
 
 ## 1. Підготовка змінних
 
 ```bash
-# AWS_REGION визначає регіон, у якому вже створена VPC з Lesson1_3.
+# AWS_REGION визначає регіон, у якому вже створена VPC з Lesson1_4.
 export AWS_REGION="${AWS_REGION:-us-east-1}"
 
 # Ці ID викладач бере зі стану попереднього заняття.

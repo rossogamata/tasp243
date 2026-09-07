@@ -1,93 +1,170 @@
-# Практичне заняття 1. Проєктування та реалізація мережі
+# Групове заняття 1. Створення мережевої основи
 ### Змістовний модуль 1 · Технології хмарних обчислень
 
-> **Тип заняття:** практичне заняття.
+> **Тип заняття:** групове заняття.
 >
-> Тут немає покрокового рецепта команд. Курсант самостійно реалізує мережеву частину Cloud Operations Portal, спираючись на демонстрацію з [Lesson1_2](../Lesson1_2/README.md). Викладач консультує та перевіряє контрольні точки.
+> Викладач виконує команди в AWS CloudShell і пояснює кожен параметр. Курсант спостерігає, ставить питання та записує алгоритм. Самостійне створення мережі є завданням практичного заняття 1.4.
 
-## Мета
+## Мета демонстрації
 
-Створити мережеву основу, яку без повторного створення VPC використають EC2, ALB і наступні компоненти порталу.
-
-## Вихідні обмеження
-
-- регіон: доступний регіон AWS Academy;
-- VPC CIDR: `10.0.0.0/16`;
-- subnet A: `10.0.1.0/24`;
-- subnet B: `10.0.2.0/24`;
-- subnet мають бути в різних Availability Zones;
-- усі ресурси мають містити теги `Project=cloud-operations-portal` і `Owner=<ваше ім'я>`;
-- у GitHub не публікуються секрети та реальні ключі доступу.
-
-## Архітектурне завдання
-
-Перед роботою намалюйте власну схему й позначте напрямок пакетів:
+Показати, як створюється мережа для майбутніх EC2 і ALB:
 
 ```mermaid
-flowchart TB
-    Internet[Інтернет] --> IGW[Internet Gateway]
-    IGW --> Routes[Public route table]
-    Routes --> SubnetA[Subnet A / AZ-1]
-    Routes --> SubnetB[Subnet B / AZ-2]
-    SubnetA --> WebA[Майбутній EC2 web-a]
-    SubnetB --> WebB[Майбутній EC2 web-b]
-    WebA --> SG[Security Group]
-    WebB --> SG
-    NACL[Network ACL на рівні subnet] --> SubnetA
-    NACL --> SubnetB
+flowchart LR
+    VPC[VPC 10.0.0.0/16] --> A[Subnet A / AZ-1]
+    VPC --> B[Subnet B / AZ-2]
+    VPC --> IGW[Internet Gateway]
+    IGW --> RT[Route table]
+    RT --> A
+    RT --> B
+    A --> SG[Security Group]
+    B --> SG
 ```
 
-На схемі окремо підпишіть:
+## 1. Підготовка CloudShell
 
-- межу VPC;
-- адресний простір кожної subnet;
-- маршрут `0.0.0.0/0`;
-- правила для HTTP і адміністративного доступу;
-- компоненти, які будуть додані на Lesson1_6.
+```bash
+# Перевіряємо, що AWS CLI доступний у CloudShell.
+aws --version
 
-## Завдання
+# Перевіряємо тимчасову роль і акаунт Learner Lab.
+aws sts get-caller-identity
 
-1. Створіть VPC за власним планом адресації.
-2. Створіть дві subnet у різних AZ.
-3. Підключіть Internet Gateway.
-4. Створіть route table і прив'яжіть її до обох subnet.
-5. Налаштуйте Security Group для майбутнього вебсервера.
-6. Налаштуйте Network ACL так, щоб не блокувати потрібні відповіді TCP.
-7. Перевірте кожну залежність і внесіть ID ресурсів до локального файлу стану.
-8. Оформіть результат у GitHub без реальних секретів.
+# Встановлюємо регіон, спільний для всіх наступних ресурсів.
+export AWS_REGION="${AWS_REGION:-us-east-1}"
+aws configure set region "$AWS_REGION"
+```
 
-## Артефакти
+## 2. VPC
 
-Після роботи в репозиторії мають бути:
+```bash
+# Створюємо адресний простір проєкту.
+# /16 залишає місце для додаткових subnet у наступних модулях.
+VPC_ID=$(aws ec2 create-vpc \
+  --cidr-block 10.0.0.0/16 \
+  --tag-specifications 'ResourceType=vpc,Tags=[{Key=Name,Value=cloud-portal-vpc}]' \
+  --query 'Vpc.VpcId' \
+  --output text)
 
-- `docs/network-architecture.md` зі схемою;
-- `docs/network-inventory.md` з VPC ID, subnet ID, AZ, CIDR і призначенням;
-- `state/environment.example.env` із назвами змінних без реальних значень;
-- таблиця дозволених портів;
-- короткий опис різниці Security Group і Network ACL;
-- checklist перевірки перед Lesson1_4.
+# Вмикаємо DNS hostnames, щоб public EC2 міг отримати DNS-ім'я.
+aws ec2 modify-vpc-attribute \
+  --vpc-id "$VPC_ID" \
+  --enable-dns-hostnames '{"Value":true}'
 
-## Критерії готовності
+echo "VPC: $VPC_ID"
+```
 
-| Перевірка | Очікуваний результат |
-|---|---|
-| VPC | CIDR відповідає затвердженій схемі |
-| Availability Zones | subnet розміщені у двох різних AZ |
-| Маршрути | обидві subnet мають потрібний маршрут |
-| Доступ | HTTP дозволений лише запланованим правилом |
-| Теги | ресурси можна знайти за Project і Owner |
-| Передача стану | наступне заняття не створює нову VPC |
-| Документація | схема відповідає фактичним ресурсам |
+## 3. Internet Gateway
 
-## Самоперевірка
+```bash
+# Створюємо компонент, який може бути target для зовнішнього маршруту.
+IGW_ID=$(aws ec2 create-internet-gateway \
+  --tag-specifications 'ResourceType=internet-gateway,Tags=[{Key=Name,Value=cloud-portal-igw}]' \
+  --query 'InternetGateway.InternetGatewayId' \
+  --output text)
 
-Поясніть викладачу:
+# Прикріплюємо IGW до конкретної VPC.
+aws ec2 attach-internet-gateway \
+  --internet-gateway-id "$IGW_ID" \
+  --vpc-id "$VPC_ID"
+```
 
-1. чому маршрут і Security Group вирішують різні задачі;
-2. чому subnet у різних AZ не означають автоматичне балансування;
-3. що станеться, якщо NACL дозволить вхідний HTTP, але заблокує ephemeral ports;
-4. які ресурси потрібно видаляти першими, а які останніми.
+## 4. Дві subnet
 
-## Межі роботи
+```bash
+# Обираємо дві доступні Availability Zones поточного регіону.
+AZS=($(aws ec2 describe-availability-zones \
+  --state available \
+  --query 'AvailabilityZones[0:2].ZoneName' \
+  --output text))
 
-На цьому занятті не потрібно створювати ALB, S3, CloudFront або Lambda. Практика завершується мережею та її документацією.
+# Перша subnet має власний /24-блок і першу AZ.
+SUBNET_A_ID=$(aws ec2 create-subnet \
+  --vpc-id "$VPC_ID" \
+  --cidr-block 10.0.1.0/24 \
+  --availability-zone "${AZS[0]}" \
+  --tag-specifications 'ResourceType=subnet,Tags=[{Key=Name,Value=cloud-portal-subnet-a}]' \
+  --query 'Subnet.SubnetId' \
+  --output text)
+
+# Друга subnet має інший CIDR і другу AZ.
+SUBNET_B_ID=$(aws ec2 create-subnet \
+  --vpc-id "$VPC_ID" \
+  --cidr-block 10.0.2.0/24 \
+  --availability-zone "${AZS[1]}" \
+  --tag-specifications 'ResourceType=subnet,Tags=[{Key=Name,Value=cloud-portal-subnet-b}]' \
+  --query 'Subnet.SubnetId' \
+  --output text)
+
+echo "A: $SUBNET_A_ID / ${AZS[0]}"
+echo "B: $SUBNET_B_ID / ${AZS[1]}"
+```
+
+## 5. Route table
+
+```bash
+# Створюємо таблицю маршрутів усередині VPC.
+RT_ID=$(aws ec2 create-route-table \
+  --vpc-id "$VPC_ID" \
+  --tag-specifications 'ResourceType=route-table,Tags=[{Key=Name,Value=cloud-portal-public-rt}]' \
+  --query 'RouteTable.RouteTableId' \
+  --output text)
+
+# Весь зовнішній IPv4-трафік направляємо до Internet Gateway.
+aws ec2 create-route \
+  --route-table-id "$RT_ID" \
+  --destination-cidr-block 0.0.0.0/0 \
+  --gateway-id "$IGW_ID"
+
+# Прив'язуємо таблицю до обох subnet.
+aws ec2 associate-route-table --route-table-id "$RT_ID" --subnet-id "$SUBNET_A_ID"
+aws ec2 associate-route-table --route-table-id "$RT_ID" --subnet-id "$SUBNET_B_ID"
+```
+
+## 6. Security Group
+
+```bash
+# Security Group є stateful firewall на рівні мережевого інтерфейсу EC2.
+SG_ID=$(aws ec2 create-security-group \
+  --group-name cloud-portal-sg \
+  --description 'HTTP access for Cloud Operations Portal' \
+  --vpc-id "$VPC_ID" \
+  --query 'GroupId' \
+  --output text)
+
+# Для демонстрації відкриваємо HTTP.
+# SSH у навчальному проєкті потрібно обмежувати, а не відкривати всьому інтернету.
+aws ec2 authorize-security-group-ingress \
+  --group-id "$SG_ID" \
+  --protocol tcp \
+  --port 80 \
+  --cidr 0.0.0.0/0
+```
+
+## 7. Перевірка викладача
+
+```bash
+# Порівнюємо фактичні subnet із запланованими CIDR і AZ.
+aws ec2 describe-subnets \
+  --filters "Name=vpc-id,Values=$VPC_ID" \
+  --query 'Subnets[].{Id:SubnetId,CIDR:CidrBlock,AZ:AvailabilityZone}' \
+  --output table
+
+# Переконуємося, що default route має Internet Gateway як target.
+aws ec2 describe-route-tables \
+  --route-table-ids "$RT_ID" \
+  --query 'RouteTables[0].Routes[].{Destination:DestinationCidrBlock,Gateway:GatewayId,State:State}' \
+  --output table
+```
+
+## Питання під час демонстрації
+
+1. Який ресурс визначає адресний простір?
+2. Чому дві subnet мають різні CIDR?
+3. Яка команда прив'язує route table до subnet?
+4. На якому рівні працює Security Group?
+5. Чому правила NACL і Security Group не є взаємозамінними?
+
+## Межі заняття
+
+Викладач не виконує фінальне створення EC2, ALB, S3, CloudFront або Lambda. Курсант переносить алгоритм побудови мережі на практичне заняття 1.4.

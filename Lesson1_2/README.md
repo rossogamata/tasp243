@@ -1,172 +1,101 @@
-# Групове заняття 1. Побудова мережевої основи
+# Лекція 2. Сервіси та архітектура хмарного рішення
 ### Змістовний модуль 1 · Технології хмарних обчислень
 
-> **Тип заняття:** групове заняття.
+> **Тип заняття:** лекція.
 >
-> Викладач виконує дії в CloudShell і коментує кожну команду. Курсант спостерігає, ставить питання та фіксує логіку. Самостійне створення власної VPC відбувається на практичному занятті 1.3.
+> На лекції немає команд AWS, демонстрації CloudShell або практичної роботи. Викладач пояснює призначення сервісів і архітектурні зв'язки, а курсанти фіксують теорію та готують питання до групового заняття.
 
-## Мета демонстрації
+## Мета лекції
 
-Показати повний шлях від порожньої VPC до мережі, у якій може працювати вебсервер:
+Після заняття курсант:
+
+- пояснює призначення VPC, EC2, S3, ALB, CloudFront і Lambda;
+- розрізняє мережевий, обчислювальний, сховищний і serverless-шари;
+- розуміє шлях HTTP-запиту в Cloud Operations Portal;
+- пояснює, які компоненти залежать від VPC;
+- може обґрунтувати вибір сервісу для заданої потреби.
+
+## 1. Шари хмарного рішення
+
+```mermaid
+flowchart TB
+    Network[Мережевий шар: VPC, subnet, маршрути, правила]
+    Compute[Обчислювальний шар: EC2, ALB]
+    Storage[Шар зберігання: S3]
+    Delivery[Доставка: CloudFront]
+    Serverless[Serverless: Lambda]
+    Network --> Compute
+    Storage --> Delivery
+    Compute --> Delivery
+    Serverless --> Delivery
+```
+
+Мережевий шар створює межі та маршрути. Обчислювальний шар запускає процеси. S3 зберігає статичні об'єкти, CloudFront доставляє їх ближче до користувача, а Lambda запускає короткі функції без керування сервером.
+
+## 2. Основні сервіси
+
+| Сервіс | Роль у проєкті | Ключове питання |
+|---|---|---|
+| VPC | Ізольований адресний простір | Які ресурси можуть обмінюватися трафіком? |
+| EC2 | Віртуальний сервер | Хто обслуговує процес і ОС? |
+| ALB | Балансування HTTP | Яка ціль здорова? |
+| S3 | Об'єктне сховище | Який об'єкт потрібно віддати? |
+| CloudFront | CDN і кеш | Звідки користувач отримає об'єкт? |
+| Lambda | Подійне виконання коду | Чи потрібен постійний сервер? |
+
+## 3. Архітектура Cloud Operations Portal
 
 ```mermaid
 flowchart LR
-    VPC[VPC 10.0.0.0/16] --> A[Subnet A 10.0.1.0/24]
-    VPC --> B[Subnet B 10.0.2.0/24]
-    VPC --> IGW[Internet Gateway]
-    IGW --> RT[Public route table]
-    RT --> A
-    RT --> B
-    A --> SG[Security Group]
-    B --> SG
+    User[Користувач] --> CF[CloudFront]
+    CF --> S3[S3 frontend]
+    User --> ALB[Application Load Balancer]
+    ALB --> A[EC2 web-a / AZ-1]
+    ALB --> B[EC2 web-b / AZ-2]
+    CLI[CloudShell] --> Lambda[Lambda health/status]
+    A --> VPC[VPC]
+    B --> VPC
+    ALB --> VPC
 ```
 
-## 1. Перевірка доступу
+### Шлях статичного запиту
 
-```bash
-# Показує версію клієнта AWS CLI, який використовує CloudShell.
-aws --version
+1. Користувач звертається до CloudFront.
+2. CloudFront перевіряє edge cache.
+3. Якщо об'єкта немає або він застарів, distribution звертається до S3 origin.
+4. Об'єкт повертається користувачу та може потрапити в кеш.
 
-# Показує тимчасову ідентичність Learner Lab.
-# Команда допомагає переконатися, що викладач працює не в іншому акаунті.
-aws sts get-caller-identity
+### Шлях динамічного запиту
 
-# Встановлює регіон для наступних команд, якщо змінна ще не задана.
-export AWS_REGION="${AWS_REGION:-us-east-1}"
-aws configure set region "$AWS_REGION"
-```
+1. Користувач звертається до DNS-імені ALB.
+2. ALB знаходить healthy target.
+3. Запит передається до EC2 у відповідній subnet.
+4. Відповідь повертається через ALB.
 
-## 2. Створення VPC
+### Шлях serverless-виклику
 
-```bash
-# Створює ізольований адресний простір проєкту.
-# /16 залишає місце для кількох subnet і наступних етапів.
-VPC_ID=$(aws ec2 create-vpc \
-  --cidr-block 10.0.0.0/16 \
-  --tag-specifications 'ResourceType=vpc,Tags=[{Key=Name,Value=cloud-portal-vpc}]' \
-  --query 'Vpc.VpcId' \
-  --output text)
+1. CloudShell або подія викликає Lambda.
+2. AWS запускає handler у визначеному runtime.
+3. Функція повертає JSON і записує результат у логи.
 
-# Вмикає DNS-імена для ресурсів усередині VPC.
-aws ec2 modify-vpc-attribute \
-  --vpc-id "$VPC_ID" \
-  --enable-dns-hostnames '{"Value":true}'
+## 4. Порівняння моделей
 
-echo "VPC створено: $VPC_ID"
-```
+| Сценарій | EC2 | Lambda | S3 | CloudFront |
+|---|---|---|---|---|
+| Довгий вебпроцес | Підходить | Не основний сценарій | Не підходить | Не запускає процес |
+| Статичний HTML | Надлишковий | Надлишковий | Підходить | Доставляє кеш |
+| Коротка health-функція | Можливо | Підходить | Не підходить | Не виконує код |
+| Розподіл HTTP | Не виконує цю роль | Не виконує цю роль | Не виконує цю роль | Може бути edge-рівнем |
 
-## 3. Підключення Internet Gateway
+## Питання для перевірки розуміння
 
-```bash
-# Створює шлюз, який може підключати public subnet до інтернету.
-IGW_ID=$(aws ec2 create-internet-gateway \
-  --tag-specifications 'ResourceType=internet-gateway,Tags=[{Key=Name,Value=cloud-portal-igw}]' \
-  --query 'InternetGateway.InternetGatewayId' \
-  --output text)
+1. Чому ALB не є заміною VPC?
+2. Чому S3 не потребує EC2 для зберігання HTML?
+3. Які переваги дає розміщення EC2 у різних AZ?
+4. Чому CloudFront може повернути попередню версію файлу?
+5. Коли для health/status краще Lambda, а коли EC2?
+6. Які компоненти потрібно захистити Security Group?
 
-# Прикріплює шлюз саме до створеної VPC.
-aws ec2 attach-internet-gateway \
-  --internet-gateway-id "$IGW_ID" \
-  --vpc-id "$VPC_ID"
+## Результат лекції
 
-echo "Internet Gateway підключено: $IGW_ID"
-```
-
-## 4. Створення subnet у двох AZ
-
-```bash
-# Отримує дві доступні Availability Zones поточного регіону.
-AZS=($(aws ec2 describe-availability-zones \
-  --state available \
-  --query 'AvailabilityZones[0:2].ZoneName' \
-  --output text))
-
-# Створює першу subnet у першій зоні.
-SUBNET_A_ID=$(aws ec2 create-subnet \
-  --vpc-id "$VPC_ID" \
-  --cidr-block 10.0.1.0/24 \
-  --availability-zone "${AZS[0]}" \
-  --tag-specifications 'ResourceType=subnet,Tags=[{Key=Name,Value=cloud-portal-public-a}]' \
-  --query 'Subnet.SubnetId' \
-  --output text)
-
-# Створює другу subnet в іншій зоні для зменшення залежності від однієї AZ.
-SUBNET_B_ID=$(aws ec2 create-subnet \
-  --vpc-id "$VPC_ID" \
-  --cidr-block 10.0.2.0/24 \
-  --availability-zone "${AZS[1]}" \
-  --tag-specifications 'ResourceType=subnet,Tags=[{Key=Name,Value=cloud-portal-public-b}]' \
-  --query 'Subnet.SubnetId' \
-  --output text)
-
-echo "Subnet A: $SUBNET_A_ID (${AZS[0]})"
-echo "Subnet B: $SUBNET_B_ID (${AZS[1]})"
-```
-
-## 5. Маршрутизація
-
-```bash
-# Створює таблицю маршрутів у межах цієї VPC.
-RT_ID=$(aws ec2 create-route-table \
-  --vpc-id "$VPC_ID" \
-  --tag-specifications 'ResourceType=route-table,Tags=[{Key=Name,Value=cloud-portal-public-rt}]' \
-  --query 'RouteTable.RouteTableId' \
-  --output text)
-
-# Направляє весь трафік, для якого немає точнішого маршруту, до IGW.
-aws ec2 create-route \
-  --route-table-id "$RT_ID" \
-  --destination-cidr-block 0.0.0.0/0 \
-  --gateway-id "$IGW_ID"
-
-# Прив'язує обидві subnet до таблиці маршрутів.
-aws ec2 associate-route-table --route-table-id "$RT_ID" --subnet-id "$SUBNET_A_ID"
-aws ec2 associate-route-table --route-table-id "$RT_ID" --subnet-id "$SUBNET_B_ID"
-```
-
-## 6. Група безпеки
-
-```bash
-# Створює stateful firewall на рівні мережевого інтерфейсу EC2.
-SG_ID=$(aws ec2 create-security-group \
-  --group-name "cloud-portal-sg" \
-  --description "HTTP access for Cloud Operations Portal" \
-  --vpc-id "$VPC_ID" \
-  --query 'GroupId' \
-  --output text)
-
-# Для демонстрації відкриваємо HTTP з будь-якої адреси.
-# На практиці адміністративний SSH-доступ потрібно обмежувати власною IP-адресою.
-aws ec2 authorize-security-group-ingress \
-  --group-id "$SG_ID" \
-  --protocol tcp \
-  --port 80 \
-  --cidr 0.0.0.0/0
-```
-
-## 7. Перевірка результату
-
-```bash
-# Виводить адреси та назви subnet у створеній VPC.
-aws ec2 describe-subnets \
-  --filters "Name=vpc-id,Values=$VPC_ID" \
-  --query 'Subnets[].{Id:SubnetId,CIDR:CidrBlock,AZ:AvailabilityZone}' \
-  --output table
-
-# Показує маршрут 0.0.0.0/0 і його Internet Gateway.
-aws ec2 describe-route-tables \
-  --route-table-ids "$RT_ID" \
-  --query 'RouteTables[0].Routes[].{Destination:DestinationCidrBlock,Gateway:GatewayId,State:State}' \
-  --output table
-```
-
-## Міні-завдання під час демонстрації
-
-1. Визначити, через який компонент проходить пакет від EC2 до інтернету.
-2. Пояснити, чому одного IGW достатньо для двох subnet.
-3. Вказати, де діє Security Group, а де мав би діяти Network ACL.
-4. Назвати команду, якою перевіряється, до якої AZ належить subnet.
-
-## Межі цього заняття
-
-На груповому занятті не створюється фінальний EC2, ALB, S3, CloudFront або Lambda. Їх додавання і перевірка є завданнями наступних практичних етапів.
+Курсант має підготувати конспект сервісів і чернетку фінальної схеми. Команди AWS демонструються на груповому занятті 1.3, а власне створення VPC відбувається на практиці 1.4.
