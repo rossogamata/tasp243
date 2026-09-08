@@ -6,18 +6,9 @@
 
 ## Наскрізний продукт
 
-```mermaid
-flowchart TB
-    User[Користувач] --> CF[CloudFront]
-    CF --> S3[S3: статичний frontend]
-    User --> ALB[Application Load Balancer]
-    ALB --> A[EC2 web-a / AZ-1]
-    ALB --> B[EC2 web-b / AZ-2]
-    CLI[CloudShell] --> Lambda[Lambda health/status]
-    VPC[VPC] --> A
-    VPC --> B
-    VPC --> ALB
-```
+![Cloud Operations Portal: альтернативна архітектурна діаграма](images/cloud-operations-portal.png)
+
+> **Альтернативне представлення:** ця ілюстрація доповнює Mermaid-схеми в матеріалах занять і показує ту саму архітектуру у візуальному форматі.
 
 Фінальний продукт має показати:
 
