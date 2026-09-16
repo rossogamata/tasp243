@@ -147,9 +147,103 @@ aws s3 cp ./site/index.html "s3://$BUCKET_NAME/index.html" \
 aws s3api head-object --bucket "$BUCKET_NAME" --key index.html
 ```
 
-Викладач показує створення CloudFront distribution через консоль або JSON-конфігурацію. Потрібно пояснити `Origin`, `DefaultRootObject`, `ViewerProtocolPolicy`, `AllowedMethods` і час переходу distribution до `Deployed`.
+## 5. CloudFront distribution
 
-## 5. Lambda і IAM
+CloudFront не розміщується у VPC, subnet або security group. Це глобальна CDN, яка приймає запит у найближчій edge location, перевіряє кеш і за потреби отримує об'єкт з origin. У цій демонстрації bucket залишається приватним, а доступ CloudFront до нього надається через Origin Access Control (OAC).
+
+```bash
+# OAC дозволяє CloudFront підписувати запити до приватного S3 origin.
+OAC_ID=$(aws cloudfront create-origin-access-control \
+  --origin-access-control-config '{"Name":"cloud-portal-oac-'"$LAB_ID"'","Description":"Access from CloudFront to private S3","SigningProtocol":"sigv4","SigningBehavior":"always","OriginAccessControlOriginType":"s3"}' \
+  --query 'OriginAccessControl.Id' \
+  --output text)
+
+# У конфігурації origin використовується REST endpoint bucket, а не S3 website endpoint.
+# ViewerProtocolPolicy redirect-to-https захищає доступ користувача до CDN.
+cat > /tmp/cloudfront-distribution.json <<EOF
+{
+  "CallerReference": "cloud-portal-${LAB_ID}",
+  "Comment": "Cloud Operations Portal frontend",
+  "DefaultRootObject": "index.html",
+  "Origins": {
+    "Quantity": 1,
+    "Items": [{
+      "Id": "S3-${BUCKET_NAME}",
+      "DomainName": "${BUCKET_NAME}.s3.${AWS_REGION}.amazonaws.com",
+      "OriginAccessControlId": "${OAC_ID}",
+      "S3OriginConfig": {"OriginAccessIdentity": ""}
+    }]
+  },
+  "DefaultCacheBehavior": {
+    "TargetOriginId": "S3-${BUCKET_NAME}",
+    "ViewerProtocolPolicy": "redirect-to-https",
+    "AllowedMethods": {"Quantity": 2, "Items": ["GET", "HEAD"], "CachedMethods": {"Quantity": 2, "Items": ["GET", "HEAD"]}},
+    "CachePolicyId": "658327ea-f89d-4fab-a63d-7e88639e58f6",
+    "Compress": true
+  },
+  "Enabled": true,
+  "PriceClass": "PriceClass_100",
+  "ViewerCertificate": {"CloudFrontDefaultCertificate": true},
+  "Restrictions": {"GeoRestriction": {"RestrictionType": "none", "Quantity": 0}}
+}
+EOF
+
+# Створення distribution може тривати кілька хвилин.
+DISTRIBUTION_ID=$(aws cloudfront create-distribution \
+  --distribution-config file:///tmp/cloudfront-distribution.json \
+  --query 'Distribution.Id' \
+  --output text)
+
+DISTRIBUTION_DOMAIN=$(aws cloudfront get-distribution \
+  --id "$DISTRIBUTION_ID" \
+  --query 'Distribution.DomainName' \
+  --output text)
+echo "Distribution: $DISTRIBUTION_ID"
+echo "URL: https://$DISTRIBUTION_DOMAIN"
+```
+
+Після створення distribution викладач додає до bucket policy дозвіл лише для цієї distribution. Це важливіше за тимчасове відкриття bucket через `Principal: "*"`.
+
+```bash
+# ARN distribution використовується як умова bucket policy.
+DISTRIBUTION_ARN=$(aws cloudfront get-distribution \
+  --id "$DISTRIBUTION_ID" \
+  --query 'Distribution.ARN' \
+  --output text)
+
+cat > /tmp/cloudfront-bucket-policy.json <<EOF
+{
+  "Version": "2012-10-17",
+  "Statement": [{
+    "Sid": "AllowCloudFrontReadOnly",
+    "Effect": "Allow",
+    "Principal": {"Service": "cloudfront.amazonaws.com"},
+    "Action": "s3:GetObject",
+    "Resource": "arn:aws:s3:::${BUCKET_NAME}/*",
+    "Condition": {"StringEquals": {"AWS:SourceArn": "${DISTRIBUTION_ARN}"}}
+  }]
+}
+EOF
+
+aws s3api put-bucket-policy \
+  --bucket "$BUCKET_NAME" \
+  --policy file:///tmp/cloudfront-bucket-policy.json
+
+# Перевірка чекає саме готовність distribution, а не лише створення ресурсу.
+aws cloudfront wait distribution-deployed --id "$DISTRIBUTION_ID"
+curl -fsSI "https://$DISTRIBUTION_DOMAIN/"
+```
+
+Потрібно пояснити `Origin`, OAC, `DefaultRootObject`, `ViewerProtocolPolicy`, `AllowedMethods`, `CachePolicyId`, edge cache і час переходу distribution до `Deployed`. Викладач окремо наголошує, що CloudFront може повернути стару версію файлу з кешу.
+
+```bash
+# Після зміни index.html примусово прибираємо стару версію з edge cache.
+aws cloudfront create-invalidation \
+  --distribution-id "$DISTRIBUTION_ID" \
+  --paths '/*'
+```
+
+## 6. Lambda і IAM
 
 Викладач демонструє завантаження `index.html` до унікального bucket, а потім створення Lambda з мінімальним handler. Під час показу обов'язково пояснюються bucket policy, IAM execution role, runtime і формат відповіді.
 
@@ -196,5 +290,5 @@ cat /tmp/lambda-response.json
 
 - Викладач не виконує за курсантів фінальне проєктування.
 - Курсант не копіює реальні ID ресурсів із демонстрації.
-- CloudFront може бути продемонстрований як окремий ресурс; повна перевірка порталу виконується на Lesson1_6.
+- Повна перевірка CloudFront і тест кешування виконується на Lesson1_6.
 - Cleanup демонструється частково, повний cleanup є завданням практики.
