@@ -1,0 +1,196 @@
+<!doctype html>
+<html lang="uk">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Docker Mouse | Lesson 2/4</title>
+  <style>
+    :root {
+      --ink: #17334d;
+      --navy: #102b46;
+      --sky: #f8e7b0;
+      --water: #2ca8b5;
+      --water-deep: #08758f;
+      --red: #e84e50;
+      --yellow: #f5c94a;
+      --paper: #fffdf4;
+    }
+
+    * { box-sizing: border-box; }
+
+    body {
+      min-height: 100vh;
+      margin: 0;
+      color: var(--ink);
+      font-family: Georgia, "Times New Roman", serif;
+      background: linear-gradient(160deg, var(--sky) 0 36%, var(--water) 36% 100%);
+    }
+
+    .page {
+      width: min(1120px, calc(100% - 32px));
+      margin: 0 auto;
+      padding: 28px 0 56px;
+    }
+
+    .topline {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      gap: 18px;
+      margin-bottom: 28px;
+      font-family: "Trebuchet MS", sans-serif;
+      font-size: .82rem;
+      font-weight: 800;
+      letter-spacing: .12em;
+      text-transform: uppercase;
+    }
+
+    .tag {
+      padding: 9px 13px;
+      background: var(--yellow);
+      border: 3px solid var(--ink);
+      box-shadow: 4px 4px 0 var(--ink);
+    }
+
+    main {
+      display: grid;
+      grid-template-columns: 1.2fr .8fr;
+      gap: 24px;
+      align-items: stretch;
+    }
+
+    .hero, .panel {
+      border: 4px solid var(--ink);
+      box-shadow: 9px 9px 0 rgba(16, 43, 70, .48);
+    }
+
+    .hero {
+      position: relative;
+      min-height: 485px;
+      overflow: hidden;
+      padding: clamp(28px, 6vw, 70px);
+      background: var(--yellow);
+    }
+
+    .hero::after {
+      content: "";
+      position: absolute;
+      width: 250px;
+      height: 250px;
+      right: -90px;
+      bottom: -105px;
+      border: 28px dotted rgba(232, 78, 80, .6);
+      border-radius: 50%;
+      transform: rotate(18deg);
+    }
+
+    h1 {
+      position: relative;
+      z-index: 1;
+      max-width: 620px;
+      margin: 0 0 20px;
+      font-size: clamp(3rem, 8vw, 6.5rem);
+      line-height: .86;
+      letter-spacing: 0;
+    }
+
+    .hero p {
+      position: relative;
+      z-index: 1;
+      max-width: 520px;
+      margin: 0;
+      font-family: "Trebuchet MS", sans-serif;
+      font-size: 1.1rem;
+      line-height: 1.5;
+    }
+
+    .mascot {
+      position: absolute;
+      right: 34px;
+      bottom: 24px;
+      width: 170px;
+      height: 170px;
+      z-index: 1;
+    }
+
+    .ear, .head, .muzzle { position: absolute; border: 5px solid var(--ink); }
+    .ear { width: 66px; height: 66px; border-radius: 50%; background: var(--navy); top: 0; }
+    .ear.left { left: 0; }
+    .ear.right { right: 0; }
+    .head { width: 128px; height: 128px; border-radius: 50%; background: #586d82; left: 21px; top: 27px; }
+    .muzzle { width: 79px; height: 55px; border-radius: 50%; background: #f7d49b; left: 45px; top: 76px; }
+    .eye { position: absolute; top: 69px; width: 12px; height: 16px; border-radius: 50%; background: var(--ink); z-index: 2; }
+    .eye.left { left: 62px; }
+    .eye.right { left: 108px; }
+    .nose { position: absolute; top: 99px; left: 80px; width: 22px; height: 15px; border-radius: 50%; background: var(--red); border: 3px solid var(--ink); z-index: 2; }
+    .smile { position: absolute; top: 119px; left: 74px; width: 35px; height: 16px; border-bottom: 4px solid var(--ink); border-radius: 50%; z-index: 2; }
+
+    .panel { padding: 28px; background: var(--paper); }
+    .panel h2 { margin: 0 0 20px; font-size: 1.65rem; }
+    .facts { display: grid; gap: 14px; margin: 0; font-family: "Trebuchet MS", sans-serif; }
+    .fact { display: flex; justify-content: space-between; gap: 16px; padding-bottom: 12px; border-bottom: 2px dashed #9ccbc5; }
+    .fact dt { font-weight: 800; }
+    .fact dd { margin: 0; text-align: right; }
+
+    .stamp {
+      display: grid;
+      place-items: center;
+      min-height: 128px;
+      margin-top: 28px;
+      color: var(--paper);
+      text-align: center;
+      background: var(--red);
+      border: 3px solid var(--ink);
+      transform: rotate(2deg);
+      font-family: "Trebuchet MS", sans-serif;
+      font-weight: 800;
+    }
+
+    .stamp strong { display: block; font-size: 2rem; }
+    footer { margin-top: 28px; color: var(--paper); text-align: center; font-family: "Trebuchet MS", sans-serif; }
+
+    @media (max-width: 760px) {
+      .topline { align-items: flex-start; flex-direction: column; }
+      main { grid-template-columns: 1fr; }
+      .hero { min-height: 545px; }
+      .mascot { right: 24px; bottom: 20px; transform: scale(.82); transform-origin: bottom right; }
+      .fact { align-items: flex-start; flex-direction: column; gap: 4px; }
+      .fact dd { text-align: left; }
+    }
+  </style>
+</head>
+<body>
+  <div class="page">
+    <div class="topline">
+      <span>Технології контейнеризації · заняття 2/4</span>
+      <span class="tag">Docker demo</span>
+    </div>
+
+    <main>
+      <section class="hero">
+        <h1>Docker<br>Mouse</h1>
+        <p>Невеликий NGINX-контейнер для демонстрації життєвого циклу, мережі та збереження даних.</p>
+        <div class="mascot" aria-label="Оригінальна мультяшна мишка" role="img">
+          <span class="ear left"></span><span class="ear right"></span>
+          <span class="head"></span><span class="muzzle"></span>
+          <span class="eye left"></span><span class="eye right"></span>
+          <span class="nose"></span><span class="smile"></span>
+        </div>
+      </section>
+
+      <aside class="panel">
+        <h2>Контейнер запущено</h2>
+        <dl class="facts">
+          <div class="fact"><dt>Образ</dt><dd>lesson2-4-demo:1.0</dd></div>
+          <div class="fact"><dt>Сервер</dt><dd>NGINX Alpine</dd></div>
+          <div class="fact"><dt>Маршрут</dt><dd>localhost:8082</dd></div>
+          <div class="fact"><dt>Порт</dt><dd>8082 → 80</dd></div>
+        </dl>
+        <div class="stamp"><div><span>Групове заняття</span><strong>RUNNING</strong></div></div>
+      </aside>
+    </main>
+
+    <footer>Образ створено з Dockerfile · дані зберігаються у volume, а не в пам'яті контейнера</footer>
+  </div>
+</body>
+</html>
