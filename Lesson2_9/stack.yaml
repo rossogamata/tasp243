@@ -1,0 +1,15 @@
+services:
+  web:
+    image: nginx:1.27-alpine
+    ports:
+      - target: 80
+        published: 8089
+        protocol: tcp
+        mode: ingress
+    deploy:
+      replicas: 3
+      restart_policy:
+        condition: any
+      update_config:
+        parallelism: 1
+        delay: 10s
