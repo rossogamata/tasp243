@@ -1,0 +1,12 @@
+- name: Create managed directories
+  ansible.builtin.file:
+    path: "{{ item }}"
+    state: directory
+    mode: "0755"
+  loop: "{{ managed_directories }}"
+
+- name: Render the system report
+  ansible.builtin.template:
+    src: report.txt.j2
+    dest: "{{ report_file }}"
+    mode: "0644"

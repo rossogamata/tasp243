@@ -1,0 +1,11 @@
+Ansible lesson report
+Inventory host: {{ inventory_hostname }}
+Hostname: {{ ansible_hostname }}
+Operating system family: {{ ansible_os_family }}
+Environment: {{ environment }}
+Report status: {{ report_status }}
+
+Managed directories:
+{% for directory in managed_directories %}
+- {{ directory }}
+{% endfor %}

@@ -1,0 +1,38 @@
+- name: Demonstrate Ansible variables and helper modules
+  hosts: lesson34
+  gather_facts: true
+
+  pre_tasks:
+    - name: Inspect the operating system release file
+      block:
+        - name: Check the configured probe path
+          ansible.builtin.stat:
+            path: "{{ probe_path }}"
+          register: probe_result
+
+        - name: Set the report status
+          ansible.builtin.set_fact:
+            report_status: "{{ 'exists' if probe_result.stat.exists else 'missing' }}"
+      rescue:
+        - name: Record a failed probe
+          ansible.builtin.set_fact:
+            report_status: check_failed
+
+        - name: Explain the failed probe
+          ansible.builtin.debug:
+            msg: "Could not inspect {{ probe_path }} on {{ inventory_hostname }}"
+      always:
+        - name: Show the probe status
+          ansible.builtin.debug:
+            var: report_status
+
+    - name: Show Debian-family system details
+      ansible.builtin.debug:
+        msg:
+          inventory_host: "{{ inventory_hostname }}"
+          os_family: "{{ ansible_os_family }}"
+          environment: "{{ environment }}"
+      when: ansible_os_family == "Debian"
+
+  roles:
+    - role: system_report

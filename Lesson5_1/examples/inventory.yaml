@@ -1,0 +1,10 @@
+# Playbook запускається на control plane 10.243.2.99.
+# У inventory перелічуються лише керовані вузли.
+all:
+  children:
+    lesson34:
+      hosts:
+        managed-node-1:
+          ansible_host: 10.243.2.100
+          ansible_user: ubuntu
+          ansible_python_interpreter: /usr/bin/python3
