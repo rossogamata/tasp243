@@ -1,5 +1,5 @@
-# Заняття 5. Змінні, блоки, умови, цикли, шаблони та ролі в Ansible
-### Змістовний модуль 5 · Автоматизація конфігурації
+# Заняття 3.5. Змінні, блоки, умови, цикли, шаблони та ролі в Ansible
+### Змістовний модуль 3 · Автоматизація конфігурації
 
 > **Тип заняття:** групове заняття та самостійна робота.
 >
@@ -122,8 +122,8 @@ when:
     state: directory
     mode: "0755"
   loop:
-    - /opt/lesson5
-    - /opt/lesson5/logs
+    - /opt/lesson3-5
+    - /opt/lesson3-5/logs
 ```
 
 Для словників зручно використовувати іменовані змінні елемента:
@@ -158,7 +158,7 @@ Directory={{ directory }}
 - name: Render configuration
   ansible.builtin.template:
     src: lesson.conf.j2
-    dest: /opt/lesson5/lesson.conf
+    dest: /opt/lesson3-5/lesson.conf
     mode: "0644"
 ```
 
@@ -255,12 +255,12 @@ Role підключають у play:
 | Control plane | `10.243.2.99` | Тут встановлено Ansible і звідси запускається playbook. |
 | Managed node | `10.243.2.100` | Цільовий Ubuntu-вузол з SSH-користувачем `ubuntu`. |
 
-Control plane не додається до inventory: playbook керує лише managed node. Перед заняттям покладіть каталог `Lesson5_1` у робочу копію проєкту на control plane. Переконайтеся, що на `10.243.2.99` встановлено Ansible, а SSH-ключ користувача доступний через `ssh-agent` або стандартний SSH client config. Не додавайте приватний ключ до каталогу прикладу чи Git.
+Control plane не додається до inventory: playbook керує лише managed node. Перед заняттям покладіть каталог `Lesson3_5` у робочу копію проєкту на control plane. Переконайтеся, що на `10.243.2.99` встановлено Ansible, а SSH-ключ користувача доступний через `ssh-agent` або стандартний SSH client config. Не додавайте приватний ключ до каталогу прикладу чи Git.
 
 Playbook не встановлює пакети й працює лише з каталогами та файлами у `/tmp` на керованому вузлі. Команди нижче виконуйте на control plane `10.243.2.99` з кореня копії репозиторію:
 
 ```bash
-cd Lesson5_1/examples
+cd Lesson3_5/examples
 ansible --version
 ansible-inventory -i inventory.yaml --list
 ansible lesson34 -i inventory.yaml -m ansible.builtin.ping
@@ -268,7 +268,7 @@ ansible-playbook -i inventory.yaml site.yaml --syntax-check
 ansible-playbook -i inventory.yaml site.yaml --check --diff
 ansible-playbook -i inventory.yaml site.yaml --diff
 ansible-playbook -i inventory.yaml site.yaml
-ansible lesson34 -i inventory.yaml -m ansible.builtin.command -a "cat /tmp/lesson5-report/report.txt"
+ansible lesson34 -i inventory.yaml -m ansible.builtin.command -a "cat /tmp/lesson3-5-report/report.txt"
 ```
 
 Перший запуск створює каталоги й звіт; наступний має показати `changed=0`. Перевірте вивід `cat`: у ньому будуть hostname, сімейство ОС, середовище, статус і список каталогів. Якщо SSH-користувач або ключ відрізняються, скоригуйте відповідні SSH-налаштування, не зберігаючи секрети в inventory.
@@ -283,7 +283,7 @@ ansible lesson34 -i inventory.yaml -m ansible.builtin.command -a "cat /tmp/lesso
 6. Пояснити `block`, `rescue`, `always` та умову `when`.
 7. Пояснити цикл над каталогами.
 8. Прочитати Jinja2-шаблон і результуючий звіт.
-9. Виконати playbook повністю, перевірити `/tmp/lesson5-report/report.txt` і повторити запуск для перевірки ідемпотентності.
+9. Виконати playbook повністю, перевірити `/tmp/lesson3-5-report/report.txt` і повторити запуск для перевірки ідемпотентності.
 
 ## Самостійна робота
 
@@ -292,12 +292,12 @@ ansible lesson34 -i inventory.yaml -m ansible.builtin.command -a "cat /tmp/lesso
 Створіть playbook, який для вузла з inventory:
 
 1. збирає facts і перевіряє, чи `ansible_os_family` дорівнює `Debian`;
-2. перевіряє директорію `/tmp/lesson5-register` модулем `stat`;
+2. перевіряє директорію `/tmp/lesson3-5-register` модулем `stat`;
 3. зберігає результат у змінній через `register`;
 4. створює змінну `report_status` через `set_fact` зі значенням `exists` або `missing`;
 5. показує три ключові facts і статус через `debug`;
 6. для двох шляхів створює каталоги через `loop`;
-7. рендерить Jinja2-шаблон у `/tmp/lesson5-report/report.txt`;
+7. рендерить Jinja2-шаблон у `/tmp/lesson3-5-report/report.txt`;
 8. повторно запускає playbook і перевіряє ідемпотентність.
 
 ### Вимоги до звіту

@@ -1,0 +1,7 @@
+environment: lab
+probe_path: /etc/os-release
+report_directory: /tmp/lesson3-5-report
+report_file: /tmp/lesson3-5-report/report.txt
+managed_directories:
+  - "{{ report_directory }}"
+  - /tmp/lesson3-5-work
